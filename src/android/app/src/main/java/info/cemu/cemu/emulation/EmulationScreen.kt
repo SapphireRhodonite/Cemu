@@ -1,6 +1,10 @@
 package info.cemu.cemu.emulation
 
 import android.annotation.SuppressLint
+import android.app.Activity
+import android.content.Context
+import android.hardware.display.DisplayManager
+import android.view.Display
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import androidx.activity.compose.BackHandler
@@ -36,6 +40,7 @@ import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -47,6 +52,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.LayoutDirection
@@ -56,6 +62,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.MutableCreationExtras
 import androidx.lifecycle.viewmodel.compose.viewModel
 import info.cemu.cemu.R
+import info.cemu.cemu.common.android.display.DisplayUtils
 import info.cemu.cemu.common.settings.GamePadPosition
 import info.cemu.cemu.common.settings.HotkeyAction
 import info.cemu.cemu.common.ui.extensions.showMessage
@@ -91,7 +98,6 @@ fun EmulationScreen(
     val emulationError by viewModel.emulationError.collectAsState()
     val isEmulationInitialized by viewModel.isEmulationInitialized.collectAsState()
     val sideMenuState by viewModel.sideMenuState.collectAsState()
-    val gamePadPosition by viewModel.gamePadPosition.collectAsState()
     val isInputOverlayVisible by viewModel.isInputOverlayVisible.collectAsState()
     val inputOverlaySettings by viewModel.inputOverlaySettings.collectAsState()
 
@@ -124,6 +130,14 @@ fun EmulationScreen(
 
     LaunchedEffect(drawerState.isClosed) {
         setInputListeningEnabled(drawerState.isClosed)
+    }
+
+    LaunchedEffect(sideMenuState.areScreensSwapped) {
+        NativeEmulation.setSwapScreens(sideMenuState.areScreensSwapped)
+    }
+
+    LaunchedEffect(sideMenuState.isExternalScreenRotatedLeft) {
+        NativeEmulation.setExternalScreenRotatedLeft(sideMenuState.isExternalScreenRotatedLeft)
     }
 
     LaunchedEffect(Unit) {
@@ -178,11 +192,8 @@ fun EmulationScreen(
         },
     ) {
         EmulationSurfaces(
-            sideMenuState = sideMenuState,
-            gamePadPosition = gamePadPosition,
-            mainHolderCallback = viewModel.mainHolderCallback,
-            padHolderCallback = viewModel.padHolderCallback,
-            onInitializeEmulation = viewModel::initializeEmulation,
+            viewModel = viewModel,
+            isEmulationInitialized = isEmulationInitialized,
         )
 
         InputOverlaySurface(
@@ -309,6 +320,26 @@ private fun EmulationSideMenuContent(
         onCheckedChange = { updateState(sideMenuState.copy(isPadVisible = it)) },
     )
 
+    CheckboxItem(
+        label = tr("External PAD screen"),
+        checked = sideMenuState.isPadOnExternalDisplay,
+        onCheckedChange = { updateState(sideMenuState.copy(isPadOnExternalDisplay = it)) },
+        enabled = sideMenuState.isPadVisible,
+    )
+
+    CheckboxItem(
+        label = tr("Swap screens"),
+        checked = sideMenuState.areScreensSwapped,
+        onCheckedChange = { updateState(sideMenuState.copy(areScreensSwapped = it)) },
+    )
+
+    CheckboxItem(
+        label = tr("Rotate external screen left"),
+        checked = sideMenuState.isExternalScreenRotatedLeft,
+        onCheckedChange = { updateState(sideMenuState.copy(isExternalScreenRotatedLeft = it)) },
+        enabled = sideMenuState.isPadOnExternalDisplay,
+    )
+
     TextButtonItem(
         label = tr("Emulated USB Devices"),
         onClick = onShowEmulatedUSBDevices,
@@ -390,69 +421,117 @@ private fun TextButtonItem(
 
 @Composable
 private fun EmulationSurfaces(
-    sideMenuState: SideMenuState,
-    gamePadPosition: GamePadPosition?,
-    mainHolderCallback: SurfaceHolder.Callback,
-    padHolderCallback: SurfaceHolder.Callback,
-    onInitializeEmulation: () -> Unit
+    viewModel: EmulationViewModel,
+    isEmulationInitialized: Boolean,
 ) {
+    val context = LocalContext.current
+    val activity = context as? Activity
+    val sideMenuState by viewModel.sideMenuState.collectAsState()
+    val gamePadPosition by viewModel.gamePadPosition.collectAsState()
+    val mainSurfaceDimensions by viewModel.mainSurfaceDimensions.collectAsState()
+    val padSurfaceDimensions by viewModel.padSurfaceDimensions.collectAsState()
+
     if (gamePadPosition == null) {
         return
     }
 
-    val isVertical = gamePadPosition.isVertical()
-    val appearsAfterTV = gamePadPosition.appearsAfterTV()
-    val isPadVisible = sideMenuState.isPadVisible
+    val padDisplay = if (activity != null) rememberPadDisplay(activity) else null
+    val isPadVisibleEffective = sideMenuState.isPadVisible && isEmulationInitialized
+    val usePadPresentation =
+        isPadVisibleEffective && sideMenuState.isPadOnExternalDisplay && padDisplay != null
 
-    @Composable
-    fun MainSurface(modifier: Modifier) {
-        EmulationSurface(
-            modifier = modifier,
-            isTV = true,
-            holderCallback = mainHolderCallback,
-            afterInit = { onInitializeEmulation() },
+    val mainTouchListener = remember { CanvasOnTouchListener() }
+    val padTouchListener = remember { CanvasOnTouchListener() }
+    val padPresentationTouchListener = remember { CanvasOnTouchListener() }
+
+    val isMainTargetingTV = !sideMenuState.areScreensSwapped
+    val mainTargetDimensions =
+        if (isMainTargetingTV) mainSurfaceDimensions else padSurfaceDimensions
+
+    val isPadTargetingTV = sideMenuState.areScreensSwapped
+    val padTargetDimensions =
+        if (isPadTargetingTV) mainSurfaceDimensions else padSurfaceDimensions
+
+    val rotatePresentationTouch = usePadPresentation && sideMenuState.isExternalScreenRotatedLeft
+
+    LaunchedEffect(isPadTargetingTV, padTargetDimensions, rotatePresentationTouch) {
+        padPresentationTouchListener.updateConfiguration(
+            isTv = isPadTargetingTV,
+            surfaceWidth = padTargetDimensions.width,
+            surfaceHeight = padTargetDimensions.height,
+            rotateLeft = rotatePresentationTouch,
         )
     }
 
-    @Composable
-    fun PadSurface(modifier: Modifier) {
-        if (isPadVisible) {
+    DisposableEffect(activity, padDisplay, usePadPresentation, sideMenuState.isExternalScreenRotatedLeft) {
+        val activityNonNull = activity ?: return@DisposableEffect onDispose {}
+        if (!usePadPresentation) {
+            return@DisposableEffect onDispose {}
+        }
+        val padDisplayNonNull = padDisplay ?: return@DisposableEffect onDispose {}
+
+        NativeEmulation.setExternalScreenRotatedLeft(sideMenuState.isExternalScreenRotatedLeft)
+
+        val padPresentation = PadPresentation(
+            context = activityNonNull,
+            display = padDisplayNonNull,
+            rotateLeft = sideMenuState.isExternalScreenRotatedLeft,
+            holderCallback = viewModel.padHolderCallback,
+            touchListener = padPresentationTouchListener,
+        )
+
+        padPresentation.show()
+
+        onDispose { padPresentation.dismiss() }
+    }
+
+    LinearLayout(gamePadPosition) { itemModifier ->
+        EmulationSurface(
+            modifier = itemModifier,
+            holderCallback = viewModel.mainHolderCallback,
+            touchListener = mainTouchListener,
+            touchIsTv = isMainTargetingTV,
+            touchSurfaceWidth = mainTargetDimensions.width,
+            touchSurfaceHeight = mainTargetDimensions.height,
+            afterInit = { viewModel.initializeEmulation() },
+        )
+
+        if (isPadVisibleEffective && !usePadPresentation) {
             EmulationSurface(
-                modifier = modifier,
-                isTV = false,
-                holderCallback = padHolderCallback,
+                modifier = itemModifier,
+                holderCallback = viewModel.padHolderCallback,
+                touchListener = padTouchListener,
+                touchIsTv = isPadTargetingTV,
+                touchSurfaceWidth = padTargetDimensions.width,
+                touchSurfaceHeight = padTargetDimensions.height,
             )
         }
-    }
-
-    @Composable
-    fun SurfacesInOrder(itemModifier: Modifier) {
-        if (appearsAfterTV) {
-            MainSurface(itemModifier)
-            PadSurface(itemModifier)
-        } else {
-            PadSurface(itemModifier)
-            MainSurface(itemModifier)
-        }
-    }
-
-    LinearLayout(isVertical) { itemModifier ->
-        SurfacesInOrder(itemModifier)
     }
 }
 
 @Composable
 private fun LinearLayout(
-    isVertical: Boolean,
-    content: @Composable (Modifier) -> Unit,
+    gamePadPosition: GamePadPosition,
+    content: @Composable (itemModifier: Modifier) -> Unit,
 ) {
-    if (isVertical) {
-        Column(modifier = Modifier.fillMaxSize()) {
+    if (gamePadPosition.isVertical()) {
+        val arrangement =
+            if (gamePadPosition.appearsAfterTV()) Arrangement.Top else Arrangement.Bottom
+
+        Column(
+            modifier = Modifier.fillMaxSize(), verticalArrangement = arrangement
+        ) {
             content(Modifier.weight(1f))
         }
     } else {
+        val arrangement =
+            if (gamePadPosition.appearsAfterTV()) Arrangement.Start else Arrangement.End
+
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-            Row(modifier = Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                horizontalArrangement = arrangement,
+            ) {
                 content(Modifier.weight(1f))
             }
         }
@@ -463,8 +542,12 @@ private fun LinearLayout(
 @SuppressLint("ClickableViewAccessibility")
 private fun EmulationSurface(
     modifier: Modifier,
-    isTV: Boolean,
     holderCallback: SurfaceHolder.Callback,
+    touchListener: CanvasOnTouchListener,
+    touchIsTv: Boolean,
+    touchSurfaceWidth: Int,
+    touchSurfaceHeight: Int,
+    rotateLeft: Boolean = false,
     afterInit: () -> Unit = {}
 ) {
     AndroidView(
@@ -473,7 +556,7 @@ private fun EmulationSurface(
             SurfaceView(context).apply {
                 var firstChange = true
 
-                setOnTouchListener(CanvasOnTouchListener(isTV))
+                setOnTouchListener(touchListener)
 
                 holder.addCallback(holderCallback)
 
@@ -492,7 +575,46 @@ private fun EmulationSurface(
                     override fun surfaceDestroyed(holder: SurfaceHolder) {}
                 })
             }
-        })
+        },
+        update = {
+            touchListener.updateConfiguration(
+                isTv = touchIsTv,
+                surfaceWidth = touchSurfaceWidth,
+                surfaceHeight = touchSurfaceHeight,
+                rotateLeft = rotateLeft,
+            )
+        },
+    )
+}
+
+@Composable
+private fun rememberPadDisplay(activity: Activity): Display? {
+    val displayManager =
+        remember(activity) { activity.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager }
+    var padDisplay by remember { mutableStateOf<Display?>(null) }
+
+    fun updatePadDisplay() {
+        padDisplay =
+            if ((activity.display?.displayId ?: Display.DEFAULT_DISPLAY) == Display.DEFAULT_DISPLAY) {
+                DisplayUtils.getExternalDisplay(activity)
+            } else {
+                DisplayUtils.getInternalDisplay(activity)
+            }
+    }
+
+    DisposableEffect(displayManager, activity) {
+        val listener = object : DisplayManager.DisplayListener {
+            override fun onDisplayAdded(displayId: Int) = updatePadDisplay()
+            override fun onDisplayRemoved(displayId: Int) = updatePadDisplay()
+            override fun onDisplayChanged(displayId: Int) = updatePadDisplay()
+        }
+
+        updatePadDisplay()
+        displayManager.registerDisplayListener(listener, null)
+        onDispose { displayManager.unregisterDisplayListener(listener) }
+    }
+
+    return padDisplay
 }
 
 @Composable

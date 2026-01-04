@@ -38,6 +38,8 @@ namespace WindowSystem
 		std::atomic_int32_t pad_width, pad_height;			 // client size of pad window
 		std::atomic_int32_t phys_pad_width, phys_pad_height; // client size of pad window in physical pixels
 		std::atomic<double> pad_dpi_scale;
+		std::atomic_bool external_screen_rotated_left = false;
+		std::atomic_bool swap_screens = false;
 
 		std::atomic_bool pad_maximized = false;
 		std::atomic_int32_t restored_pad_x = -1, restored_pad_y = -1;

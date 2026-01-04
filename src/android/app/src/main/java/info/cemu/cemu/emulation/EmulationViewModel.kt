@@ -37,6 +37,9 @@ data class SideMenuState(
     val isMotionEnabled: Boolean = false,
     val isTVReplacedWithPad: Boolean = false,
     val isPadVisible: Boolean = false,
+    val isPadOnExternalDisplay: Boolean = false,
+    val areScreensSwapped: Boolean = false,
+    val isExternalScreenRotatedLeft: Boolean = false,
     val isInputOverlayVisible: Boolean = false,
 )
 
@@ -69,6 +72,8 @@ sealed interface NativeError {
     object LaunchingTitleError : NativeError
 }
 
+data class SurfaceDimensions(val width: Int = 1, val height: Int = 1)
+
 class EmulationViewModel(
     private val launchPath: String,
     private val dataStore: DataStore<AppSettings> = AppSettingsStore.dataStore
@@ -78,6 +83,12 @@ class EmulationViewModel(
 
     private val _sideMenuState = MutableStateFlow(SideMenuState())
     val sideMenuState = _sideMenuState.asStateFlow()
+
+    private val _mainSurfaceDimensions = MutableStateFlow(SurfaceDimensions())
+    val mainSurfaceDimensions = _mainSurfaceDimensions.asStateFlow()
+
+    private val _padSurfaceDimensions = MutableStateFlow(SurfaceDimensions())
+    val padSurfaceDimensions = _padSurfaceDimensions.asStateFlow()
 
     val isInputOverlayVisible =
         sideMenuState.map { it.isInputOverlayVisible }
@@ -90,7 +101,14 @@ class EmulationViewModel(
     init {
         viewModelScope.launch {
             val settings = dataStore.data.first()
-            _sideMenuState.update { it.copy(isInputOverlayVisible = settings.inputOverlaySettings.isOverlayEnabled) }
+            _sideMenuState.update {
+                it.copy(
+                    isPadVisible = settings.emulationSettings.isPadVisible,
+                    isPadOnExternalDisplay = settings.emulationSettings.isPadOnExternalDisplay,
+                    isExternalScreenRotatedLeft = settings.emulationSettings.isExternalScreenRotatedLeft,
+                    isInputOverlayVisible = settings.inputOverlaySettings.isOverlayEnabled,
+                )
+            }
         }
     }
 
@@ -123,7 +141,25 @@ class EmulationViewModel(
     }
 
     fun updateSideMenuState(sideMenuState: SideMenuState) {
+        val oldState = _sideMenuState.value
         _sideMenuState.value = sideMenuState
+
+        if (oldState.isPadVisible != sideMenuState.isPadVisible ||
+            oldState.isPadOnExternalDisplay != sideMenuState.isPadOnExternalDisplay ||
+            oldState.isExternalScreenRotatedLeft != sideMenuState.isExternalScreenRotatedLeft
+        ) {
+            viewModelScope.launch {
+                dataStore.updateData {
+                    it.copy(
+                        emulationSettings = it.emulationSettings.copy(
+                            isPadVisible = sideMenuState.isPadVisible,
+                            isPadOnExternalDisplay = sideMenuState.isPadOnExternalDisplay,
+                            isExternalScreenRotatedLeft = sideMenuState.isExternalScreenRotatedLeft,
+                        )
+                    )
+                }
+            }
+        }
     }
 
     val gamePadPosition = dataStore.data.map { it.emulationSettings.gamePadPosition }
@@ -135,6 +171,18 @@ class EmulationViewModel(
 
     val destroyedSurfaces = ConditionFlags()
     var setSurfaces = ConditionFlags()
+
+    private fun updateSurfaceDimensions(isMainCanvas: Boolean, width: Int, height: Int) {
+        val newDimensions = SurfaceDimensions(
+            width = width.coerceAtLeast(1),
+            height = height.coerceAtLeast(1),
+        )
+        if (isMainCanvas) {
+            _mainSurfaceDimensions.value = newDimensions
+        } else {
+            _padSurfaceDimensions.value = newDimensions
+        }
+    }
 
     private inner class CanvasSurfaceHolderCallback(val isMainCanvas: Boolean) :
         SurfaceHolder.Callback {
@@ -149,6 +197,7 @@ class EmulationViewModel(
         ) {
             try {
                 NativeEmulation.setSurfaceSize(width, height, isMainCanvas)
+                updateSurfaceDimensions(isMainCanvas, width, height)
 
                 if (setSurfaces.get(isMainCanvas)) {
                     return

@@ -1,6 +1,7 @@
 #include "AndroidFilesystemCallbacks.h"
 #include "AndroidInputHelpers.h"
 #include "Cafe/CafeSystem.h"
+#include "Cafe/HW/Latte/Core/Latte.h"
 #include "Cafe/HW/Latte/Core/LatteOverlay.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanAPI.h"
 #include "Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.h"
@@ -222,6 +223,20 @@ Java_info_cemu_cemu_nativeinterface_NativeEmulation_setReplaceTVWithPadView([[ma
 {
 	// Emulate pressing the TAB key for showing DRC instead of TV
 	WindowSystem::GetWindowInfo().set_keystate(static_cast<uint32>(WindowSystem::PlatformKeyCodes::TAB), swapped);
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeEmulation_setSwapScreens([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jboolean swapped)
+{
+	auto& windowInfo = WindowSystem::GetWindowInfo();
+	windowInfo.swap_screens = swapped;
+	LatteGPUState.isDRCPrimary = swapped;
+}
+
+extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
+Java_info_cemu_cemu_nativeinterface_NativeEmulation_setExternalScreenRotatedLeft([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jboolean rotated)
+{
+	WindowSystem::GetWindowInfo().external_screen_rotated_left = rotated;
 }
 
 extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
