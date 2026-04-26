@@ -3,6 +3,7 @@
 #include "util/helpers/fspinlock.h"
 #include "util/highresolutiontimer/HighResolutionTimer.h"
 #include "Common/cpu_features.h"
+#include "input/emulated/VPADController.h"
 
 #if defined(ARCH_X86_64)
 #include <immintrin.h>
@@ -157,7 +158,9 @@ uint64 PPCTimer_getFromRDTSC()
 
 	// timer scaling
 	elapsedTick <<= 3ull; // *8
-	uint8 timerShiftFactor = ActiveSettings::GetTimerShiftFactor();
+	const uint8 timerShiftFactor = VPADController::is_any_fast_forward_active()
+		? 1
+		: ActiveSettings::GetTimerShiftFactor();
 	elapsedTick >>= timerShiftFactor;
 
 	_tickSummary += elapsedTick;

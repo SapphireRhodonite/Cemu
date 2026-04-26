@@ -54,7 +54,7 @@ VPADInputPanel::VPADInputPanel(wxWindow* parent)
 
 	//////////////////////////////////////////////////////////////////
 
-	main_sizer->Add(new wxStaticLine(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxVERTICAL), wxGBPosition(0, column + 2), wxGBSpan(11, 1), wxALL | wxEXPAND, 5);
+	main_sizer->Add(new wxStaticLine(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxVERTICAL), wxGBPosition(0, column + 2), wxGBSpan(12, 1), wxALL | wxEXPAND, 5);
 
 	row = 0;
 	column += 3;
@@ -75,7 +75,7 @@ VPADInputPanel::VPADInputPanel(wxWindow* parent)
 	m_left_draw = new wxInputDraw(this, wxID_ANY, wxDefaultPosition, { 60, 60 });
 	main_sizer->Add(m_left_draw, wxGBPosition(row, column + 1), wxGBSpan(2, 1), wxTOP | wxBOTTOM | wxEXPAND | wxALIGN_CENTER, 5);
 
-	main_sizer->Add(new wxStaticLine(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxVERTICAL), wxGBPosition(0, column + 3), wxGBSpan(11, 1), wxALL | wxEXPAND, 5);
+	main_sizer->Add(new wxStaticLine(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxVERTICAL), wxGBPosition(0, column + 3), wxGBSpan(12, 1), wxALL | wxEXPAND, 5);
 
 	//////////////////////////////////////////////////////////////////
 
@@ -114,7 +114,7 @@ VPADInputPanel::VPADInputPanel(wxWindow* parent)
 	main_sizer->Add(volume_text, wxGBPosition(row, column + 2), wxDefaultSpan, wxALL, 5);
 	m_volume->Bind(wxEVT_SLIDER, &VPADInputPanel::OnVolumeChange, this, wxID_ANY, wxID_ANY, new wxControlObject(volume_text));
 
-	main_sizer->Add(new wxStaticLine(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxVERTICAL), wxGBPosition(0, column + 3), wxGBSpan(11, 1), wxALL | wxEXPAND, 5);
+	main_sizer->Add(new wxStaticLine(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxVERTICAL), wxGBPosition(0, column + 3), wxGBSpan(12, 1), wxALL | wxEXPAND, 5);
 
 	//////////////////////////////////////////////////////////////////
 
@@ -137,6 +137,9 @@ VPADInputPanel::VPADInputPanel(wxWindow* parent)
 	row++;
 
 	add_button_row(main_sizer, row, column, VPADController::kButtonId_Screen, _("show screen"));
+	row++;
+
+	add_button_row(main_sizer, row, column, VPADController::kButtonId_FastForward, _("fast forward"));
 	row++;
 
 	auto toggleScreenText = new wxStaticText(this, wxID_ANY, _("toggle screen"));

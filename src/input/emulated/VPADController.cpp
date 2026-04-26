@@ -1,5 +1,6 @@
 #include "input/emulated/VPADController.h"
 #include "input/api/Controller.h"
+#include <atomic>
 #include <mutex>
 #if HAS_SDL
 #include "input/api/SDL/SDLController.h"
@@ -47,11 +48,22 @@ enum ControllerVPADMapping2 : uint32
 	VPAD_REPEAT = 0x80000000,
 };
 
+namespace
+{
+	std::atomic_uint32_t s_fastForwardActiveMask = 0;
+}
+
+VPADController::~VPADController()
+{
+	set_fast_forward_active(false);
+}
+
 void VPADController::VPADRead(VPADStatus_t& status, const BtnRepeat& repeat)
 {
 	controllers_update_states();
 	m_mic_active = false;
 	m_screen_active = false;
+	bool fast_forward_active = false;
 	for (uint32 i = kButtonId_A; i < kButtonId_Max; ++i)
 	{
 		// axis will be aplied later
@@ -68,6 +80,8 @@ void VPADController::VPADRead(VPADStatus_t& status, const BtnRepeat& repeat)
 					m_mic_active = true;
 				else if (i == kButtonId_Screen)
 					m_screen_active = true;
+				else if (i == kButtonId_FastForward)
+					fast_forward_active = true;
 
 				continue;
 			}
@@ -75,6 +89,7 @@ void VPADController::VPADRead(VPADStatus_t& status, const BtnRepeat& repeat)
 			status.hold |= value;
 		}
 	}
+	set_fast_forward_active(fast_forward_active);
 
 	m_homebutton_down |= is_home_down();
 
@@ -151,7 +166,12 @@ void VPADController::update()
 	EmulatedController::update();
 
 	if (!CafeSystem::IsTitleRunning())
+	{
+		set_fast_forward_active(false);
 		return;
+	}
+
+	update_fast_forward_state();
 
 	std::unique_lock lock(m_rumble_mutex);
 	if (m_rumble_queue.empty())
@@ -182,6 +202,26 @@ void VPADController::update()
 		m_rumble_queue.pop();
 		m_parser = 0;
 	}
+}
+
+void VPADController::update_fast_forward_state()
+{
+	controllers_update_states();
+	set_fast_forward_active(is_mapping_down(kButtonId_FastForward));
+}
+
+bool VPADController::is_any_fast_forward_active()
+{
+	return s_fastForwardActiveMask.load(std::memory_order_relaxed) != 0;
+}
+
+void VPADController::set_fast_forward_active(bool active)
+{
+	const uint32 mask = 1u << player_index();
+	if (active)
+		s_fastForwardActiveMask.fetch_or(mask, std::memory_order_relaxed);
+	else
+		s_fastForwardActiveMask.fetch_and(~mask, std::memory_order_relaxed);
 }
 
 void VPADController::update_touch(VPADStatus_t& status)
@@ -384,6 +424,9 @@ std::string_view VPADController::get_button_name(ButtonId id)
 	case kButtonId_StickR_Left: return TR_NOOP("left");
 	case kButtonId_StickR_Right: return TR_NOOP("right");
 	case kButtonId_Home: return TR_NOOP("home");
+	case kButtonId_Mic: return TR_NOOP("blow mic");
+	case kButtonId_Screen: return TR_NOOP("show screen");
+	case kButtonId_FastForward: return TR_NOOP("fast forward");
 	default:
 		cemu_assert_debug(false);
 		return "";

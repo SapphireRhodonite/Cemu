@@ -454,6 +454,7 @@ enum class VPadButtons(override val nativeKeyCode: Int) : NativeInputButton {
     MIC(NativeInput.VPADButton.MIC),
     SCREEN(NativeInput.VPADButton.SCREEN),
     HOME(NativeInput.VPADButton.HOME),
+    FAST_FORWARD(NativeInput.VPADButton.FAST_FORWARD),
 }
 
 enum class ProControllerButtons(override val nativeKeyCode: Int) : NativeInputButton {

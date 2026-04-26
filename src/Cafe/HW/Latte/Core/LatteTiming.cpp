@@ -4,6 +4,7 @@
 #include "util/highresolutiontimer/HighResolutionTimer.h"
 #include "config/CemuConfig.h"
 #include "Cafe/CafeSystem.h"
+#include "input/emulated/VPADController.h"
 
 sint32 s_customVsyncFrequency = -1;
 
@@ -27,6 +28,8 @@ HRTick LatteTime_CalculateTimeBetweenVSync()
 		tick /= 1002ull;
 		tick /= 60ull;
 	}
+	if (VPADController::is_any_fast_forward_active())
+		tick /= 4;
 	return tick;
 }
 
