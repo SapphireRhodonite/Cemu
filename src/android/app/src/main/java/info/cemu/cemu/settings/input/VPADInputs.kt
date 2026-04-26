@@ -74,7 +74,8 @@ fun VPADInputs(
         inputIds = listOf(
             VPADButton.MIC,
             VPADButton.HOME,
-            VPADButton.SCREEN
+            VPADButton.SCREEN,
+            VPADButton.FAST_FORWARD
         )
     )
     Toggle(
@@ -114,5 +115,6 @@ private fun vpadButtonToString(buttonId: Int) = when (buttonId) {
     VPADButton.MIC -> tr("blow mic")
     VPADButton.SCREEN -> tr("show screen")
     VPADButton.HOME -> tr("home")
+    VPADButton.FAST_FORWARD -> tr("fast forward")
     else -> throw IllegalArgumentException("Invalid buttonId $buttonId for VPAD controller type")
 }

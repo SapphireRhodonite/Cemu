@@ -29,6 +29,7 @@ object NativeInput {
         const val MIC: Int = 25
         const val SCREEN: Int = 26
         const val HOME: Int = 27
+        const val FAST_FORWARD: Int = 28
     }
 
     object ProButton {

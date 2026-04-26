@@ -10,6 +10,15 @@ namespace NativeInput
 	WiiUMotionHandler s_wiiUMotionHandler{};
 	long s_lastMotionTimestamp = 0;
 
+	void updateFastForwardState()
+	{
+		for (size_t i = 0; i < InputManager::kMaxVPADControllers; ++i)
+		{
+			if (auto controller = InputManager::instance().get_vpad_controller(i))
+				controller->update_fast_forward_state();
+		}
+	}
+
 	void onTouchEvent(sint32 x, sint32 y, bool isTV, std::optional<bool> status = {})
 	{
 		auto& instance = InputManager::instance();
@@ -29,6 +38,7 @@ Java_info_cemu_cemu_nativeinterface_NativeInput_onNativeKey(JNIEnv* env, [[maybe
 	auto apiProvider = InputManager::instance().get_api_provider(InputAPI::Android);
 	auto androidControllerProvider = dynamic_cast<AndroidControllerProvider*>(apiProvider.get());
 	androidControllerProvider->on_key_event(deviceDescriptor, deviceName, key, is_pressed);
+	NativeInput::updateFastForwardState();
 }
 
 extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
@@ -39,6 +49,7 @@ Java_info_cemu_cemu_nativeinterface_NativeInput_onNativeAxis(JNIEnv* env, [[mayb
 	auto apiProvider = InputManager::instance().get_api_provider(InputAPI::Android);
 	auto androidControllerProvider = dynamic_cast<AndroidControllerProvider*>(apiProvider.get());
 	androidControllerProvider->on_axis_event(deviceDescriptor, deviceName, axis, value);
+	NativeInput::updateFastForwardState();
 }
 
 extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
@@ -201,10 +212,12 @@ extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeInput_onOverlayButton([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jint controllerIndex, jint mappingId, jboolean state)
 {
 	AndroidEmulatedController::getAndroidEmulatedController(controllerIndex).setButtonValue(mappingId, state);
+	NativeInput::updateFastForwardState();
 }
 
 extern "C" [[maybe_unused]] JNIEXPORT void JNICALL
 Java_info_cemu_cemu_nativeinterface_NativeInput_onOverlayAxis([[maybe_unused]] JNIEnv* env, [[maybe_unused]] jclass clazz, jint controllerIndex, jint mappingId, jfloat value)
 {
 	AndroidEmulatedController::getAndroidEmulatedController(controllerIndex).setAxisValue(mappingId, value);
+	NativeInput::updateFastForwardState();
 }

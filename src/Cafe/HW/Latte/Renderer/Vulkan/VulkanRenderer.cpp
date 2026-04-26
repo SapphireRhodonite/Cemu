@@ -18,6 +18,7 @@
 
 #include "config/ActiveSettings.h"
 #include "config/CemuConfig.h"
+#include "input/emulated/VPADController.h"
 #include "WindowSystem.h"
 
 #include "imgui/imgui_extension.h"
@@ -3064,6 +3065,18 @@ void VulkanBenchmarkPrintResults();
 void VulkanRenderer::SwapBuffers(bool swapTV, bool swapDRC)
 {
 	SubmitCommandBuffer();
+
+	static uint32 s_fastForwardPresentCounter = 0;
+	if (VPADController::is_any_fast_forward_active())
+	{
+		const bool presentFrame = (s_fastForwardPresentCounter++ % 4) == 0;
+		if (!presentFrame)
+			return;
+	}
+	else
+	{
+		s_fastForwardPresentCounter = 0;
+	}
 
 	if (swapTV && IsSwapchainInfoValid(true))
 		SwapBuffer(true);

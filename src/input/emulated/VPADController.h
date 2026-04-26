@@ -46,17 +46,20 @@ public:
 		kButtonId_Screen,
 
 		kButtonId_Home,
+		kButtonId_FastForward,
 
 		kButtonId_Max,
 	};
 
 	using EmulatedController::EmulatedController;
+	~VPADController() override;
 
 	Type type() const override { return VPAD; }
 
 	void VPADRead(VPADStatus_t& status, const BtnRepeat& repeat);
 
 	void update() override;
+	void update_fast_forward_state();
 
 	uint32 get_emulated_button_flag(uint32 id) const override;
 
@@ -69,6 +72,7 @@ public:
 	bool is_screen_active_toggle() { return m_screen_active_toggle; }
 	void set_screen_toggle(bool toggle) {m_screen_active_toggle = toggle;}
 
+	static bool is_any_fast_forward_active();
 	static std::string_view get_button_name(ButtonId id);
 
 	void clear_rumble();
@@ -104,6 +108,7 @@ private:
 	std::queue<std::vector<bool>> m_rumble_queue;
 	uint8 m_parser = 0;
 
+	void set_fast_forward_active(bool active);
 	void update_touch(VPADStatus_t& status);
 	void update_motion(VPADStatus_t& status);
 	glm::ivec2 m_last_touch_position{};
