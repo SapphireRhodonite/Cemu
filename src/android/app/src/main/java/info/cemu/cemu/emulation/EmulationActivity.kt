@@ -116,6 +116,7 @@ class EmulationActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        EmulationSessionState.onSessionStarted(this)
         DisplayUtils.init(this)
         inputManager = InputDelegateManager(this)
 
@@ -153,6 +154,11 @@ class EmulationActivity : AppCompatActivity() {
         inputManager.onResume(display.rotation)
     }
 
+    override fun onDestroy() {
+        EmulationSessionState.onSessionStopped(this)
+        super.onDestroy()
+    }
+
     private fun setupHotkeys() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -172,6 +178,7 @@ class EmulationActivity : AppCompatActivity() {
     }
 
     private fun onQuit() {
+        EmulationSessionState.syncSavesToCustomRoot(this)
         finish()
         exitProcess(0)
     }

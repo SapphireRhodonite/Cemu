@@ -15,11 +15,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun Button(label: String, description: String? = null, onClick: () -> Unit = {}) {
+fun Button(
+    label: String,
+    description: String? = null,
+    enabled: Boolean = true,
+    onClick: () -> Unit = {},
+) {
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
         ),
+        enabled = enabled,
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()

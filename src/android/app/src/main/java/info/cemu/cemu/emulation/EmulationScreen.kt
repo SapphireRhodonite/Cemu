@@ -431,9 +431,7 @@ private fun EmulationSurfaces(
     val mainSurfaceDimensions by viewModel.mainSurfaceDimensions.collectAsState()
     val padSurfaceDimensions by viewModel.padSurfaceDimensions.collectAsState()
 
-    if (gamePadPosition == null) {
-        return
-    }
+    val currentGamePadPosition = gamePadPosition ?: return
 
     val padDisplay = if (activity != null) rememberPadDisplay(activity) else null
     val isPadVisibleEffective = sideMenuState.isPadVisible && isEmulationInitialized
@@ -468,7 +466,7 @@ private fun EmulationSurfaces(
         if (!usePadPresentation) {
             return@DisposableEffect onDispose {}
         }
-        val padDisplayNonNull = padDisplay ?: return@DisposableEffect onDispose {}
+        val padDisplayNonNull = padDisplay
 
         NativeEmulation.setExternalScreenRotatedLeft(sideMenuState.isExternalScreenRotatedLeft)
 
@@ -485,7 +483,7 @@ private fun EmulationSurfaces(
         onDispose { padPresentation.dismiss() }
     }
 
-    LinearLayout(gamePadPosition) { itemModifier ->
+    LinearLayout(currentGamePadPosition) { itemModifier ->
         EmulationSurface(
             modifier = itemModifier,
             holderCallback = viewModel.mainHolderCallback,
@@ -595,7 +593,7 @@ private fun rememberPadDisplay(activity: Activity): Display? {
 
     fun updatePadDisplay() {
         padDisplay =
-            if ((activity.display?.displayId ?: Display.DEFAULT_DISPLAY) == Display.DEFAULT_DISPLAY) {
+            if (activity.display.displayId == Display.DEFAULT_DISPLAY) {
                 DisplayUtils.getExternalDisplay(activity)
             } else {
                 DisplayUtils.getInternalDisplay(activity)

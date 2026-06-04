@@ -17,6 +17,7 @@ import info.cemu.cemu.nativeinterface.NativeSettings
 fun GeneralSettingsScreen(
     navigateBack: () -> Unit,
     goToGamePathsSettings: () -> Unit,
+    goToDataStorageSettings: () -> Unit,
     viewModel: GeneralSettingsViewModel = viewModel(),
 ) {
     val context = LocalContext.current
@@ -32,6 +33,11 @@ fun GeneralSettingsScreen(
             label = tr("Add game path"),
             description = tr("Add the root directory of your game(s). It will scan all directories in it for games"),
             onClick = dropUnlessResumed { goToGamePathsSettings() },
+        )
+        Button(
+            label = tr("Data storage"),
+            description = tr("Choose where Cemu stores saves, MLC, settings and cache"),
+            onClick = dropUnlessResumed { goToDataStorageSettings() },
         )
         SingleSelection(
             label = tr("Language"),

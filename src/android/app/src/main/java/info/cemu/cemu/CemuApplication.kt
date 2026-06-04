@@ -1,10 +1,14 @@
 package info.cemu.cemu
 
 import android.app.Application
-import info.cemu.cemu.common.android.context.internalFolder
+import android.app.Activity
+import android.os.Bundle
 import info.cemu.cemu.common.settings.AppSettingsStore
+import info.cemu.cemu.common.storage.CemuSaveSyncManager
+import info.cemu.cemu.common.storage.CemuDataStorage
 import info.cemu.cemu.common.ui.localization.setLanguage
 import info.cemu.cemu.common.ui.localization.setTranslations
+import info.cemu.cemu.emulation.EmulationSessionState
 import info.cemu.cemu.nativeinterface.NativeActiveSettings.initializeActiveSettings
 import info.cemu.cemu.nativeinterface.NativeActiveSettings.setInternalDir
 import info.cemu.cemu.nativeinterface.NativeActiveSettings.setNativeLibDir
@@ -22,14 +26,20 @@ import java.io.IOException
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.util.regex.Pattern
+import java.util.concurrent.atomic.AtomicInteger
 
 class CemuApplication : Application() {
+    private lateinit var cemuUserFolder: File
+    private val startedActivities = AtomicInteger(0)
+
     override fun onCreate() {
         super.onCreate()
 
         configureExceptionHandler()
 
         AppSettingsStore.init(this)
+
+        registerActivityLifecycleCallbacks(storageSyncLifecycleCallbacks)
 
         NativeFiles.initialize(contentResolver)
 
@@ -51,7 +61,7 @@ class CemuApplication : Application() {
     }
 
     private fun saveDataFiles() {
-        val dataFolder = File(internalCemuDataFolder)
+        val dataFolder = cemuDataFolder
 
         if (!dataFolder.exists() && !dataFolder.mkdirs()) {
             return
@@ -129,13 +139,16 @@ class CemuApplication : Application() {
     }
 
     private fun initializeCemu() {
+        cemuUserFolder = runBlocking { CemuDataStorage.prepareActiveRoot(this@CemuApplication) }
+        CemuDataStorage.setActiveRoot(cemuUserFolder)
+
         val displayMetrics = resources.displayMetrics
         setDPI(displayMetrics.density)
         initializeActiveSettings(
-            userDataPath = internalCemuUserFolder,
-            configPath = internalCemuUserFolder,
-            dataPath = internalCemuDataFolder,
-            cachePath = internalCemuUserFolder,
+            userDataPath = cemuUserFolder.absolutePath,
+            configPath = cemuUserFolder.absolutePath,
+            dataPath = cemuDataFolder.absolutePath,
+            cachePath = cemuUserFolder.absolutePath,
         )
         setNativeLibDir(applicationInfo.nativeLibraryDir)
         setInternalDir(dataDir.absolutePath)
@@ -144,11 +157,28 @@ class CemuApplication : Application() {
         refreshGraphicPacks()
     }
 
-    private val internalCemuDataFolder: String
-        get() = internalFolder().resolve("data").toString()
+    private val cemuDataFolder: File
+        get() = cemuUserFolder.resolve("data")
 
-    private val internalCemuUserFolder: String
-        get() = internalFolder().toString()
+    private val storageSyncLifecycleCallbacks = object : ActivityLifecycleCallbacks {
+        override fun onActivityStarted(activity: Activity) {
+            startedActivities.incrementAndGet()
+        }
+
+        override fun onActivityStopped(activity: Activity) {
+            if (startedActivities.updateAndGet { (it - 1).coerceAtLeast(0) } == 0 &&
+                !EmulationSessionState.isEmulationRunning
+            ) {
+                CemuSaveSyncManager.flushNow(activity.applicationContext)
+            }
+        }
+
+        override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
+        override fun onActivityResumed(activity: Activity) = Unit
+        override fun onActivityPaused(activity: Activity) = Unit
+        override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
+        override fun onActivityDestroyed(activity: Activity) = Unit
+    }
 
     companion object {
         init {

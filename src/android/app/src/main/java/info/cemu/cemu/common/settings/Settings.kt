@@ -25,6 +25,20 @@ data class GuiSettings(
 )
 
 @Serializable
+data class StorageSettings(
+    val dataRootPath: String? = null,
+    val customRootUri: String? = null,
+    val mirrorRootPath: String? = null,
+    val pendingDeleteDataRootPath: String? = null,
+    val isSaveMirrorDirty: Boolean = false,
+    val lastSaveSyncAtMillis: Long? = null,
+    val lastManualSyncAtMillis: Long? = null,
+    @Deprecated("Kept only to decode settings written by older data-storage prototypes.")
+    val isMirrorDirty: Boolean = false,
+    val lastStorageError: String? = null,
+)
+
+@Serializable
 data class InputOverlayRect(
     val left: Int,
     val top: Int,
@@ -46,6 +60,7 @@ data class InputOverlaySettings(
 data class AppSettings(
     val guiSettings: GuiSettings = GuiSettings(),
     val emulationSettings: EmulationSettings = EmulationSettings(),
+    val storageSettings: StorageSettings = StorageSettings(),
     val inputOverlaySettings: InputOverlaySettings = InputOverlaySettings(),
     val hotkeySettings: Map<HotkeyAction, HotkeyCombo> = emptyMap(),
 )
